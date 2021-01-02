@@ -7,6 +7,7 @@ If you're looking for an autodiff package to use for an actual project
 https://pythonhosted.org/ad/ is a *much* more suitable choice.
 """
 
+import collections
 import numpy as np
 
 ##################
@@ -63,7 +64,7 @@ def forward(f):
             grad = np.zeros(len(args))
             grad[i] = 1
             wrapped.append(_FDepVar(arg, grad))
-        out = f(*wrapped)
+            out = f(*wrapped)
         # Extract values and derivatives to hide _FDepVars from an innocent
         # world.
         try:
@@ -79,12 +80,12 @@ def forward(f):
 class _BDepVar(object):
     """Represents an (intermediate)? dependent variable in backward autodiff.
 
-    _BDepVar's store the entire graph of a calculation, weighting edges between
+    _BDepVars store the entire graph of a calculation, weighting edges between
     nodes according to the partial derivative of one node with respect to
     another. For instance, the node (* f g) would keep edges pointing to f and g,
     with weight (g, f) respectively.
 
-    propagate(1) can then be called from the final result of the calculation to
+    propagate(self) can then be called from the final result of the calculation to
     calculate its derivative with respect to an input variable by application of
     the chain rule.
     """
@@ -92,13 +93,17 @@ class _BDepVar(object):
     def __init__(self, val, edges):
         self.val = val
         self.edges = edges
-        self.total = 0  # Not calculated until propagate()
+        self.parents = set()
+        self.partials = collections.defaultdict(int)
 
     def __add__(f, g):
         if not isinstance(g, _BDepVar):
             g = _BDepVar(g, [])
         # d/df (f+g) = d/dg (f+g) = 1
-        return _BDepVar(f.val + g.val, [(f, 1), (g, 1)])
+        ret = _BDepVar(f.val + g.val, [(f, 1), (g, 1)])
+        f.parents.add(ret)
+        g.parents.add(ret)
+        return ret
 
     def __radd__(self, other):
         return self+other
@@ -107,24 +112,41 @@ class _BDepVar(object):
         if not isinstance(g, _BDepVar):
             g = _BDepVar(g, [])
         # d/df (fg) = g, d/dg (fg) = f
-        return _BDepVar(f.val * g.val, [(f, g.val), (g, f.val)])
+        ret = _BDepVar(f.val * g.val, [(f, g.val), (g, f.val)])
+        f.parents.add(ret)
+        g.parents.add(ret)
+        return ret
 
     def __rmul__(self, other):
         return self*other
 
-    def propagate(self, partial):
+    def propagate(self, wrt, done=None):
         """
         Propagate the value of partial derivatives down the compute graph by
         way of the chain rule.
         """
-        # The calculation graph may reference a _BDepVar many times (e.g.
-        # y = x*x, so to calculate the total derivative of our output with
-        # respect to self we need to accumulate together every flow that passes
-        # through us.
-        self.total += partial
+        if wrt == self:
+            done = set()
+            # dx/dx = 1
+            self.partials[wrt] = 1
+
+        # The calculation graph is guaranteed to be a DAG, but not a tree (e.g.
+        # y = x*x), so we need to accumulate together every flow that passes
+        # through a particular node to get the derivative of the final
+        # computation with respect to that node. What's more, since this is a
+        # cascading calculation, we can't propagate until all of our incoming
+        # edges are addressed.
+        for p in self.parents:
+            if p not in traversed:
+                return
+
         for (node, weight) in self.edges:
-            node.propagate(partial * weight)
-        
+            node.partials[wrt] += self.partials[wrt] * weight
+            traversed.add(self)
+        for (node, weight) in self.edges:
+            node.propagate(wrt, traversed=traversed)
+
+
 def backward(f):
     """
     Takes a function f and returns a function f_J s.t. f_J(x)[0] is f(x) and
@@ -136,18 +158,16 @@ def backward(f):
         wrapped = []
         for i, arg in enumerate(args):
             wrapped.append(_BDepVar(arg, []))
-        J = []
-        out = f(*wrapped)
-        # For each output, propagate derivative information back to the inputs
-        # by way of the chain rule, then append the result to the jacobian.
+            J = []
+            out = f(*wrapped)
+            # For each output, propagate derivative information back to the inputs
+            # by way of the chain rule, then append the result to the jacobian.
         try:
             for o in out:
-                for w in wrapped:
-                    w.total = 0
-                o.propagate(1)
-                J.append([w.total for w in wrapped])
+                o.propagate(o)
+                J.append([w.partials[o] for w in wrapped])
             return [o.val for o in out], J
         except TypeError:
-            out.propagate(1)
-            return out.val, [w.total for w in wrapped]
+            out.propagate(out)
+            return out.val, [w.partials[out] for w in wrapped]
     return f_J
