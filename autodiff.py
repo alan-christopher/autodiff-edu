@@ -94,7 +94,7 @@ class _BDepVar(object):
         self.val = val
         self.edges = edges
         self.parents = set()
-        self.partials = collections.defaultdict(int)
+        self.derivs = collections.defaultdict(int)
 
     def __add__(f, g):
         if not isinstance(g, _BDepVar):
@@ -112,7 +112,7 @@ class _BDepVar(object):
         if not isinstance(g, _BDepVar):
             g = _BDepVar(g, [])
         # d/df (fg) = g, d/dg (fg) = f
-        ret = _BDepVar(f.val * g.val, [(f, g.val), (g, f.val)])
+        ret = _BDepVar(f.val*g.val, [(f, g.val), (g, f.val)])
         f.parents.add(ret)
         g.parents.add(ret)
         return ret
@@ -127,8 +127,8 @@ class _BDepVar(object):
         """
         if wrt == self:
             done = set()
-            # dx/dx = 1
-            self.partials[wrt] = 1
+            # df/df = 1
+            self.derivs[wrt] = 1
 
         # The calculation graph is guaranteed to be a DAG, but not a tree (e.g.
         # y = x*x), so we need to accumulate together every flow that passes
@@ -136,12 +136,15 @@ class _BDepVar(object):
         # computation with respect to that node. What's more, since this is a
         # cascading calculation, we can't propagate until all of our incoming
         # edges are addressed.
+        #
+        # Yes, there are more efficient ways to achieve DAG-ordering. No, I
+        # don't care.
         for p in self.parents:
             if p not in traversed:
                 return
 
         for (node, weight) in self.edges:
-            node.partials[wrt] += self.partials[wrt] * weight
+            node.derivs[wrt] += self.derivs[wrt] * weight
             traversed.add(self)
         for (node, weight) in self.edges:
             node.propagate(wrt, traversed=traversed)
@@ -165,9 +168,9 @@ def backward(f):
         try:
             for o in out:
                 o.propagate(o)
-                J.append([w.partials[o] for w in wrapped])
+                J.append([w.derivs[o] for w in wrapped])
             return [o.val for o in out], J
         except TypeError:
             out.propagate(out)
-            return out.val, [w.partials[out] for w in wrapped]
+            return out.val, [w.derivs[out] for w in wrapped]
     return f_J
