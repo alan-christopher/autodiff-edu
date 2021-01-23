@@ -13,6 +13,8 @@ import numpy as np
 ##################
 #  Forward Mode  #
 ##################
+
+
 class _FDepVar(object):
     """Represents an (intermediate)? dependent variable in forward autodiff.
 
@@ -36,7 +38,7 @@ class _FDepVar(object):
         return self+other
 
     def __mul__(f, g):
-        if not isinstance(f, _FDepVar):
+        if not isinstance(g, _FDepVar):
             # (cf(x))' = cf'
             return _FDepVar(f.val * g, f.grad * g)
         # (f(x)g(x))' = f'g + fg'
@@ -64,7 +66,7 @@ def forward(f):
             grad = np.zeros(len(args))
             grad[i] = 1
             wrapped.append(_FDepVar(arg, grad))
-            out = f(*wrapped)
+        out = f(*wrapped)
         # Extract values and derivatives to hide _FDepVars from an innocent
         # world.
         try:
@@ -82,12 +84,12 @@ class _BDepVar(object):
 
     _BDepVars store the entire graph of a calculation, weighting edges between
     nodes according to the partial derivative of one node with respect to
-    another. For instance, the node (* f g) would keep edges pointing to f and g,
-    with weight (g, f) respectively.
+    another. For instance, the node (* f g) would keep edges pointing to f and
+    g, with weight (g, f) respectively.
 
-    propagate(self) can then be called from the final result of the calculation to
-    calculate its derivative with respect to an input variable by application of
-    the chain rule.
+    propagate(self) can then be called from the final result of the calculation
+    to calculate its derivative with respect to an input variable by
+    application of the chain rule.
     """
 
     def __init__(self, val, edges):
@@ -140,14 +142,16 @@ class _BDepVar(object):
         # Yes, there are more efficient ways to achieve DAG-ordering. No, I
         # don't care.
         for p in self.parents:
-            if p not in traversed:
+            if p not in done:
                 return
+        if self in done:
+            return
 
         for (node, weight) in self.edges:
             node.derivs[wrt] += self.derivs[wrt] * weight
-            traversed.add(self)
+            done.add(self)
         for (node, weight) in self.edges:
-            node.propagate(wrt, traversed=traversed)
+            node.propagate(wrt, done=done)
 
 
 def backward(f):
@@ -158,14 +162,12 @@ def backward(f):
     def f_J(*args):
         # Replace the input variables with _BDepVars which will remember the
         # graph of the calculation.
-        wrapped = []
-        for i, arg in enumerate(args):
-            wrapped.append(_BDepVar(arg, []))
-            J = []
-            out = f(*wrapped)
-            # For each output, propagate derivative information back to the inputs
-            # by way of the chain rule, then append the result to the jacobian.
+        wrapped = [_BDepVar(arg, []) for arg in args]
+        out = f(*wrapped)
+        # For each output, propagate derivative information back to the inputs
+        # by way of the chain rule, then append the result to the jacobian.
         try:
+            J = []
             for o in out:
                 o.propagate(o)
                 J.append([w.derivs[o] for w in wrapped])
