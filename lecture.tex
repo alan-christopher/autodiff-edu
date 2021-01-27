@@ -79,35 +79,41 @@
 \begin{frame}{Univariate Derivatives}
   \begin{itemize}
   \item The instantaneous rate of change of $f$ in response to infinitesimal
-    perturbations in $x$. Formally:
+    perturbations in $x$.
   \item The slope of the tangent line through $(x,f(x))$.
   \end{itemize}
+  \pause
   \begin{definition}
     Let $f:\mathbb{R}\rightarrow\mathbb{R}$. We say that $f$ is differentiable
     wherever the limit
 
-    \[ f' = \lim_{t \rightarrow x} \frac{f(t)-f(x)}{t-x} \]
+    \[ f' = \lim_{h \rightarrow 0} \frac{f(x+h)-f(x)}{h} \]
 
     exists and we call $f'$ the derivative of $f$.
   \end{definition}
 \end{frame}
 
-\begin{frame}{Derivatives of Composites}
+\begin{frame}{Derivatives of Transformations}
   Linearity: \[(\alpha f+ \beta g)' = \alpha f' + \beta g'\]
+  \pause
   Product rule: \[(fg)' = f'g + fg'\]
+  \pause
   Quotient rule: \[\left(\frac{f}{g}\right)' = \frac{f'g - fg'}{g^2}\]
+  \pause
   Chain rule: \[(f \circ g)' = g' \cdot (f' \circ g)\]
 \end{frame}
 
 \begin{frame}{Gradients}
   \begin{itemize}
   \item Lots of interesting functions operate on multiple inputs.
+  \pause
   \item Idea: take the derivative with respect to one input at at time.
     \begin{itemize}
     \item Pretend the other inputs don't exist, or rather, are constant.
     \item Collate it all into a vector at the end.
     \end{itemize}
   \end{itemize}
+  \pause
   \begin{definition}
     Let $f:\mathbb{R}^n\rightarrow\mathbb{R}$, and $u_i$ be the $i$th Cartesian
     unit vector in $\mathbb{R}^n$. We say that $f$ is differentiable wherever
@@ -129,6 +135,7 @@
     \item Give the resulting matrix a fancy name
     \end{itemize}
   \end{itemize}
+  \pause
   \begin{definition}
     Let $f:\mathbb{R}^n\rightarrow\mathbb{R}^m$, be differentiable in each of its outputs at $x$. We define the Jacobian of $f$ to be the matrix such that
 
@@ -152,10 +159,11 @@
     \begin{itemize}
     \item Not always easy to express in closed form
     \end{itemize}
+  \pause
   \item But when it executes it has to boil down to some finite composition of
     ALU-executable operations.
     \begin{itemize}
-    \item We know how to differentiate sums and products.
+    \item We know how to differentiate sums, products, differences, etc
     \end{itemize}
   \end{itemize}
 \end{frame}
@@ -164,6 +172,7 @@
   \begin{itemize}
   \item Apply the ``differentiation flowchart'' to the composite function defined by
   the \emph{execution} of a numerical program.
+  \pause
   \item Compute $J_f(x)$ at the same time as $f(x)$!
   \end{itemize}
 \end{frame}
@@ -172,11 +181,14 @@
 \begin{frame}{Dependent Variables}
   \begin{itemize}
   \item Many intermediate calculations in most computer programs.
+  \pause
   \item Treat intermediate calculations as anonymous dependent variables.
+  \pause
   \item Keep track of every dependent variable's gradient WRT inputs.
     \begin{itemize}
     \item Propagate forward with product rule, quotient rule, etc.
     \end{itemize}
+  \pause
   \item Use independent variables to bootstrap the calculation
     \begin{itemize}
     \item $\frac{\partial x_i}{\partial x_j} = I_{i=j}$
@@ -189,11 +201,11 @@
 
   \begin{flalign*}
   & g_1 = x \cdot x   \implies \nabla g_1 = x \cdot (1, 0)^T + (1, 0)^T \cdot x \\
-  & g_2 = g_1 \cdot y \implies \nabla g_2 = g_1 \cdot (0, 1)^T + \nabla g_1 \cdot y \\
-  & g_3 = 2y          \implies \nabla g_3 = 2 \cdot (0, 1)^T \\
-  & f = g_2 + g_3     \implies \nabla f = \nabla g_2  + \nabla g_3 \\
+  \uncover<2->{ & g_2 = g_1 \cdot y \implies \nabla g_2 = g_1 \cdot (0, 1)^T + \nabla g_1 \cdot y \\}
+  \uncover<3->{ & g_3 = 2y          \implies \nabla g_3 = 2 \cdot (0, 1)^T \\}
+  \uncover<4->{ & f = g_2 + g_3     \implies \nabla f = \nabla g_2  + \nabla g_3 \\}
   \end{flalign*}
-  Exercise for the reader: confirm that $\nabla f = (2xy, x^2 + 2)^T$
+  \uncover<4->{Exercise for the reader: confirm that $\nabla f = (2xy, x^2 + 2)^T$}
 \end{frame}
 
 \begin{frame}[fragile]{Code I}
@@ -225,7 +237,7 @@ def forward(f):
             grad = np.zeros(len(args))
             grad[i] = 1
             wrapped.append(_FDepVar(arg, grad))
-            out = f(*wrapped)
+        out = f(*wrapped)
         try:
             return ([o.val for o in out],
                     [o.grad for o in out])
@@ -251,10 +263,12 @@ def forward(f):
 \begin{frame}{Key Idea}
   \begin{itemize}
   \item Derivatives don't have to be taken WRT input variables
+  \pause
   \item Forward mode: take $\frac{dg}{dx}, \frac{dh}{dx}$, build $\frac{df}{dx}$
     \begin{itemize}
     \item Derivatives of different functions with respect to $x$
     \end{itemize}
+  \pause
   \item Backward mode: take $\frac{df}{dg}, \frac{df}{dh}$, build $\frac{df}{dx}$
     \begin{itemize}
     \item Derivatives of $f$ with respect to different variables.
@@ -337,14 +351,17 @@ def forward(f):
 
 \begin{frame}{Propagation}
   \begin{itemize}
-  \item We can traverse the DAG to compute the chain rule
-    \begin{enumerate}
-    \item Root node initialized with $\frac{df}{df} = 1$
-    \item Other nodes accumulate values from all parents, scaled according to
-      edge weights.
-    \end{enumerate}
-  \item Note, we have to traverse in DAG-order, and we have to
-    visit all edges.
+  \item If all of a node's parents know $df$ with respect to themselves,
+    then by the chain rule its derivative is just the weighted sum of its parents.
+    \begin{itemize}
+    \item Root node always knows its derivative: $\frac{df}{df} = 1$
+    \end{itemize}
+    \pause
+  \item Note, DAG-order traversal not just a DFS.
+    \begin{itemize}
+    \item we can't visit a node until all its parents are done.
+    \item we have to traverse all edges, not visit every node.
+    \end{itemize}
   \end{itemize}
 \end{frame}
 
@@ -414,6 +431,7 @@ def forward(f):
     \item Calculation is $m$ times more expensive, where $m$ is our number of
       inputs.
     \end{itemize}
+    \pause
   \item Have to remember the calculation graph.
     \begin{itemize}
     \item Requires additional space proportional to the length of the
@@ -438,6 +456,7 @@ def forward(f):
     \item Regression: Find me the function that best matches these data points I
       measured.
     \end{itemize}
+    \pause
   \item If we define a loss function $\mathcal{L}$, and model parameters
     $\theta$ for tuning it, and call our training data $X, Y$, then we
     can formulate them as
@@ -451,18 +470,23 @@ def forward(f):
 \begin{frame}{Gradient Descent in a Nutshell}
   \begin{itemize}
   \item When you're on a hill and want to get to the bottom, \emph{walk downhill}.
+    \pause
   \item The gradient of your loss function tells you which way is downhill.
-  \item If tuned properly should always converge to a local minimum.
-  \item Doesn't always converge to a global optimum, but will if the function is
-    convex (roughly, bowl shaped).
+      \[ \theta_n = \theta_{n-1} - h_n \nabla \mathcal{L}(\theta_n) \]
+
+  % \item If tuned properly should always converge to a local minimum.
+  % \item Doesn't always converge to a global optimum, but will if the function is
+  %   convex (roughly, bowl shaped).
   \end{itemize}
 \end{frame}
 
 \begin{frame}{Neural Networks \& Backpropagation}
   \begin{itemize}
   \item Neural Networks are commonly optimized (trained) using gradient descent.
+    \pause
   \item But formulating the gradient is a PITA, sure would be nice if we could
     generate the gradient at a point programmatically and efficiently \ldots
+    \pause
   \item Which is exactly what autodiff does.
     \begin{itemize}
     \item Neural networks have many, many parameters to train on, but we only
