@@ -315,7 +315,7 @@ def forward(f):
 
 \begin{frame}{Edge Weights}
   Edges provide a convenient place to record our various
-  $\frac{\partial f}{\partial g}$s:
+  $\frac{\partial g_i}{\partial g_j}$s:
 \begin{center}
   \begin{tikzpicture}[thick,auto,->]
   \uncover<1->{
@@ -351,13 +351,14 @@ def forward(f):
 
 \begin{frame}{Propagation}
   \begin{itemize}
-  \item If all of a node's parents know $df$ with respect to themselves,
-    then by the chain rule its derivative is just the weighted sum of its parents.
+  \item If we know all of $\frac{df}{d\text{parent}}$,
+    then by the chain rule $\frac{df}{d\text{self}}$ is just the weighted sum
+    of its parents.
     \begin{itemize}
     \item Root node always knows its derivative: $\frac{df}{df} = 1$
     \end{itemize}
     \pause
-  \item Note, DAG-order traversal not just a DFS.
+  \item Note: DAG-order traversal, not just a DFS.
     \begin{itemize}
     \item we can't visit a node until all its parents are done.
     \item we have to traverse all edges, not visit every node.
