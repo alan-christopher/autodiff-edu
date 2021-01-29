@@ -429,7 +429,7 @@ def forward(f):
   \item Have to propagate derivatives backward for every output.
     \begin{itemize}
     \item Calculation is $m$ times more expensive, where $m$ is our number of
-      inputs.
+      outputs.
     \end{itemize}
     \pause
   \item Have to remember the calculation graph.
@@ -472,11 +472,7 @@ def forward(f):
   \item When you're on a hill and want to get to the bottom, \emph{walk downhill}.
     \pause
   \item The gradient of your loss function tells you which way is downhill.
-      \[ \theta_n = \theta_{n-1} - h_n \nabla \mathcal{L}(\theta_n) \]
-
-  % \item If tuned properly should always converge to a local minimum.
-  % \item Doesn't always converge to a global optimum, but will if the function is
-  %   convex (roughly, bowl shaped).
+      \[ \theta_n = \theta_{n-1} - h_n \nabla \mathcal{L}(\theta_{n-1}) \]
   \end{itemize}
 \end{frame}
 
